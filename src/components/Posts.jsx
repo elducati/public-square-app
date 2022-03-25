@@ -19,7 +19,7 @@ const PostItem = (props) => {
   React.useEffect(() => {
     let newPostMessage = "";
     let newStatus = "";
-    
+
     if (!props.postInfo.message) {
       setStatusMessage("loading...");
       let isCancelled = false;
@@ -45,8 +45,12 @@ const PostItem = (props) => {
       getPostMessage();
       return () => isCancelled = true;
     }
-    
+
   }, [props.postInfo]);
+  const renderTopic = (topic) => {
+    if (topic)
+      return (<Link to={`/topics/${topic}`} className="postTopic">#{topic}</Link>)
+  }
 
   return (
     <div className="postItem">
@@ -59,6 +63,7 @@ const PostItem = (props) => {
             <time>{getPostTime(props.postInfo.timestamp)}</time>
           </div>
           <div className="postRow">
+            {renderTopic(props.postInfo.topic)}
             {props.postInfo.message || postMessage}
             {statusMessage && <div className="status"> {statusMessage}</div>}
           </div>

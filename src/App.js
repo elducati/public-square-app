@@ -7,15 +7,61 @@ import { ProgressSpinner } from './components/ProgressSpinner';
 import { TopicSearch } from './components/TopicSearch';
 import { UserSearch } from './components/UserSearch';
 import './App.css';
+import { buildQuery, arweave, createPostInfo, delayResults } from './lib/api';
+import { useState, useEffect } from 'react';
+import { NewPost } from './components/NewPost';
+import { delay } from './lib/api';
+
+
+async function waitForNewPosts(txid) {
+  let count = 0;
+  let foundPost = null;
+  let posts = [];
+
+  while (!foundPost) {
+    count += 1;
+    console.log(`attempt ${count}`);    
+    await delay(2000 * count);
+    posts = await getPostInfos();
+    foundPost = posts.find(p => p.txid === txid);
+  }
+
+  let i = posts.indexOf(foundPost);
+  posts.unshift(posts.splice(i, 1)[0]);
+  return posts;
+}
 
 async function getPostInfos() {
-  return [];
+  const query = buildQuery();
+  const results = await arweave.api.post('/graphql', query)
+    .catch(err => {
+      console.error('GraphQL query failed');
+      throw new Error(err);
+    });
+  const edges = results.data.data.transactions.edges;
+  console.log(edges);
+  return await delayResults(100, edges.map(edge => createPostInfo(edge.node)));
+
 }
 
 const App = () => {
-  
-  React.useEffect(() => {
-    getPostInfos();
+  const [isWalletConnected, setIsWalletConnected] = useState(false);
+  const [postInfos, setPostInfos] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  async function waitForPost(txid) {
+    setIsSearching(true)
+    let posts = await waitForNewPosts(txid);
+    setPostInfos(posts)
+    setIsSearching(false);
+  }
+
+  useEffect(() => {
+    setIsSearching(true)
+    getPostInfos().then(posts => {
+      setPostInfos(posts);
+      setIsSearching(false);
+    });
   }, [])
 
   return (
@@ -23,13 +69,17 @@ const App = () => {
       <div id="content">
         <aside>
           <Navigation />
+          <WalletSelectButton onWalletConnect={() => setIsWalletConnected(true)} />
         </aside>
         <main>
           <Routes>
             <Route path="/" name="home" element={
-            <Home 
-
-            />}
+              <Home
+                isSearching={isSearching}
+                postInfos={postInfos}
+                isWalletConnected={isWalletConnected}
+                onPostMessage={waitForPost}
+              />}
             />
             <Route path="/topics" element={<Topics />}>
               <Route path="/topics/" element={<TopicSearch />} />
@@ -50,6 +100,10 @@ const Home = (props) => {
   return (
     <>
       <header>Home</header>
+      <NewPost isLoggedIn={props.isWalletConnected}
+        onPostMessage={props.onPostMessage} />
+      {props.isSearching && <ProgressSpinner />}
+      <Posts postInfos={props.postInfos} />
     </>
   );
 };
@@ -86,7 +140,7 @@ const TopicResults = () => {
     setIsSearching(true);
     setTopicPostInfos([]);
     try {
-      getPostInfos(null,topic).then(posts => { 
+      getPostInfos(null, topic).then(posts => {
         setTopicPostInfos(posts);
         setIsSearching(false);
       });
@@ -97,9 +151,9 @@ const TopicResults = () => {
   }, [topic])
   return (
     <>
-    <TopicSearch searchInput={topic} onSearch={onTopicSearch}/>
-    {isSearching && <ProgressSpinner />}
-    <Posts postInfos={topicPostInfos} />
+      <TopicSearch searchInput={topic} onSearch={onTopicSearch} />
+      {isSearching && <ProgressSpinner />}
+      <Posts postInfos={topicPostInfos} />
     </>
   )
 }
@@ -117,8 +171,8 @@ function UserResults() {
   React.useEffect(() => {
     setIsSearching(true);
     try {
-      getPostInfos(addr).then(posts => { 
-        setUserPostInfos(posts); 
+      getPostInfos(addr).then(posts => {
+        setUserPostInfos(posts);
         setIsSearching(false);
       });
     } catch (error) {
@@ -128,9 +182,9 @@ function UserResults() {
   }, [addr])
   return (
     <>
-    <UserSearch searchInput={addr} onSearch={onUserSearch}/>
-    {isSearching && <ProgressSpinner />}
-    <Posts postInfos={userPostInfos} />
+      <UserSearch searchInput={addr} onSearch={onUserSearch} />
+      {isSearching && <ProgressSpinner />}
+      <Posts postInfos={userPostInfos} />
     </>
   );
 };
