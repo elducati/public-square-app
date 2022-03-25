@@ -31,8 +31,8 @@ async function waitForNewPosts(txid) {
   return posts;
 }
 
-async function getPostInfos() {
-  const query = buildQuery();
+async function getPostInfos(ownerAddress, topic) {
+  const query = buildQuery({address:ownerAddress, topic});
   const results = await arweave.api.post('/graphql', query)
     .catch(err => {
       console.error('GraphQL query failed');
